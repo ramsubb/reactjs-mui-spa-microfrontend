@@ -1,0 +1,177 @@
+Micro Frontend Using MUI SPA
+
+. Set Up the Micro Frontend
+Install Dependencies
+
+px create-react-app microfrontend-app --template typescript
+cd microfrontend-app
+npm install @mui/material @emotion/react @emotion/styled
+
+Create Components
+
+import React from 'react';
+import { Button, Typography, Container } from '@mui/material';
+
+const App: React.FC = () => {
+  return (
+    <Container>
+      <Typography variant="h3" gutterBottom>
+        Micro Frontend with MUI
+      </Typography>
+      <Button variant="contained" color="primary">
+        Click me
+      </Button>
+    </Container>
+  );
+};
+
+export default App;
+
+Update Index.tsx
+
+import React from 'react';
+import ReactDOM from 'react-dom';
+import App from './App';
+
+ReactDOM.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+  document.getElementById('root')
+);
+
+3. Build and Deploy
+
+npm run build
+
+4. Integration with Module Federation
+Install Dependencies
+
+cd ..
+npx create-react-app main-app --template typescript
+cd main-app
+npm install @module-federation/next react react-dom
+
+Create a webpack configuration file
+
+// webpack.config.js
+const path = require('path');
+const { ModuleFederationPlugin } = require('webpack').container;
+
+module.exports = {
+  entry: './src/index.tsx',
+  output: {
+    publicPath: 'http://localhost:3000/',
+  },
+  mode: 'development',
+  devServer: {
+    port: 3000,
+    contentBase: path.join(__dirname, 'dist'),
+    historyApiFallback: true,
+  },
+  resolve: {
+    extensions: ['.tsx', '.ts', '.js'],
+  },
+  module: {
+    rules: [
+      {
+        test: /\.(ts|tsx)$/,
+        loader: 'ts-loader',
+        exclude: /node_modules/,
+      },
+    ],
+  },
+  plugins: [
+    new ModuleFederationPlugin({
+      name: 'mainApp',
+      remotes: {
+        microfrontend: 'microfrontend@http://localhost:3001/remoteEntry.js',
+      },
+      shared: {
+        react: { singleton: true, eager: true, requiredVersion: '^17.0.2' },
+        'react-dom': { singleton: true, eager: true, requiredVersion: '^17.0.2' },
+        '@mui/material': { singleton: true, eager: true, requiredVersion: '^5.0.0' },
+      },
+    }),
+  ],
+};
+
+5. Start the Main App
+Update tsconfig.json
+
+// tsconfig.json
+{
+  "compilerOptions": {
+    // ... existing options
+    "jsx": "react-jsx",
+  }
+}
+
+Update App.tsx in the main app
+tsx
+
+// src/App.tsx
+import React from 'react';
+import MicroFrontend from './MicroFrontend';
+
+const App: React.FC = () => {
+  return (
+    <div>
+      <h1>Main App</h1>
+      <MicroFrontend name="microfrontend" host="http://localhost:3001" />
+    </div>
+  );
+};
+
+Create MicroFrontend.tsx in the main app
+
+// src/MicroFrontend.tsx
+import React, { useEffect } from 'react';
+
+interface MicroFrontendProps {
+  name: string;
+  host: string;
+}
+
+const MicroFrontend: React.FC<MicroFrontendProps> = ({ name, host }) => {
+  useEffect(() => {
+    const scriptId = `micro-frontend-script-${name}`;
+
+    const renderMicroFrontend = () => {
+      window[`render${name}`](`${name}-container`);
+    };
+
+    if (document.getElementById(scriptId)) {
+      renderMicroFrontend();
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.id = scriptId;
+    script.crossOrigin = '';
+    script.src = `${host}/remoteEntry.js`;
+    script.onload = () => {
+      renderMicroFrontend();
+    };
+    document.head.appendChild(script);
+
+    return () => {
+      const element = document.getElementById(`${name}-container`);
+      if (element) {
+        element.innerHTML = '';
+      }
+      document.getElementById(scriptId)?.remove();
+      delete window[`render${name}`];
+    };
+  }, [name, host]);
+
+  return <div id={`${name}-container`} />;
+};
+
+export default MicroFrontend;
+
+6. Run the Main App
+
+npm start
+
+Visit http://localhost:3000 in your browser. You should see the main app integrating the micro frontend.
